@@ -1797,6 +1797,245 @@ class EnhancedHorseRacingGUI:
 
         except Exception as e:
             self.queue.put(('backtest_error', f"Erreur lors du backtesting spécialisé: {str(e)}"))
+            
+    """
+Correction des méthodes manquantes dans enhanced_app.py
+Ajouter ces méthodes à la classe EnhancedHorseRacingGUI
+"""
+
+    def show_specialized_features(self):
+        """Afficher l'importance des features spécialisées"""
+        if not any(self.ensemble.is_trained.values()):
+            messagebox.showwarning("Attention", "Aucun modèle spécialisé entraîné")
+            return
+    
+        # Nettoyer le frame
+        for widget in self.analysis_frame.winfo_children():
+            widget.destroy()
+    
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Importance des Features Spécialisées par Type', fontsize=16, fontweight='bold')
+    
+        try:
+            # Analyser les features pour GALOP
+            if self.ensemble.is_trained.get('GALOP', False):
+                galop_importances = self.ensemble.get_specialized_feature_importance('win', 'GALOP')
+                if galop_importances and 'lgb' in galop_importances:
+                    importances = galop_importances['lgb']
+                    feature_names = self.ensemble.feature_names.get('GALOP', [])
+                    
+                    if len(importances) == len(feature_names):
+                        # Top 15 features pour GALOP
+                        indices = np.argsort(importances)[::-1][:15]
+                        top_importances = importances[indices]
+                        top_features = [feature_names[i][:12] for i in indices]
+                        
+                        y_pos = np.arange(len(top_features))
+                        axes[0, 0].barh(y_pos, top_importances, color='#e74c3c', alpha=0.8)
+                        axes[0, 0].set_yticks(y_pos)
+                        axes[0, 0].set_yticklabels(reversed(top_features))
+                        axes[0, 0].set_xlabel('Importance')
+                        axes[0, 0].set_title('🏇 Top Features GALOP')
+                        axes[0, 0].grid(True, alpha=0.3)
+                        axes[0, 0].invert_yaxis()
+                    else:
+                        axes[0, 0].text(0.5, 0.5, 'Incompatibilité\nfeatures/importances',
+                                       ha='center', va='center', transform=axes[0, 0].transAxes)
+                else:
+                    axes[0, 0].text(0.5, 0.5, 'Features GALOP\nnon disponibles',
+                                   ha='center', va='center', transform=axes[0, 0].transAxes)
+            else:
+                axes[0, 0].text(0.5, 0.5, 'Modèle GALOP\nnon entraîné',
+                               ha='center', va='center', transform=axes[0, 0].transAxes)
+    
+            # Analyser les features pour TROT
+            if self.ensemble.is_trained.get('TROT', False):
+                trot_importances = self.ensemble.get_specialized_feature_importance('win', 'TROT')
+                if trot_importances and 'lgb' in trot_importances:
+                    importances = trot_importances['lgb']
+                    feature_names = self.ensemble.feature_names.get('TROT', [])
+                    
+                    if len(importances) == len(feature_names):
+                        # Top 15 features pour TROT
+                        indices = np.argsort(importances)[::-1][:15]
+                        top_importances = importances[indices]
+                        top_features = [feature_names[i][:12] for i in indices]
+                        
+                        y_pos = np.arange(len(top_features))
+                        axes[0, 1].barh(y_pos, top_importances, color='#3498db', alpha=0.8)
+                        axes[0, 1].set_yticks(y_pos)
+                        axes[0, 1].set_yticklabels(reversed(top_features))
+                        axes[0, 1].set_xlabel('Importance')
+                        axes[0, 1].set_title('🐎 Top Features TROT')
+                        axes[0, 1].grid(True, alpha=0.3)
+                        axes[0, 1].invert_yaxis()
+                    else:
+                        axes[0, 1].text(0.5, 0.5, 'Incompatibilité\nfeatures/importances',
+                                       ha='center', va='center', transform=axes[0, 1].transAxes)
+                else:
+                    axes[0, 1].text(0.5, 0.5, 'Features TROT\nnon disponibles',
+                                   ha='center', va='center', transform=axes[0, 1].transAxes)
+            else:
+                axes[0, 1].text(0.5, 0.5, 'Modèle TROT\nnon entraîné',
+                               ha='center', va='center', transform=axes[0, 1].transAxes)
+    
+            # Comparaison des types de features
+            if self.processed_data is not None and 'allure' in self.processed_data.columns:
+                galop_features = len([col for col in self.processed_data.columns if 'GALOP' in str(col)])
+                trot_features = len([col for col in self.processed_data.columns if 'TROT' in str(col)])
+                common_features = self.processed_data.shape[1] - galop_features - trot_features
+                
+                sizes = [galop_features, trot_features, common_features]
+                labels = ['GALOP spécifiques', 'TROT spécifiques', 'Communes']
+                colors = ['#e74c3c', '#3498db', '#95a5a6']
+                
+                axes[1, 0].pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%')
+                axes[1, 0].set_title('Répartition des Features')
+            else:
+                axes[1, 0].text(0.5, 0.5, 'Données non disponibles',
+                               ha='center', va='center', transform=axes[1, 0].transAxes)
+    
+            # Matrice de corrélation des top features
+            if self.processed_data is not None:
+                # Sélectionner quelques features clés pour la corrélation
+                key_features = ['win_rate', 'recent_form_score', 'direct_odds', 'gains_carriere']
+                available_features = [f for f in key_features if f in self.processed_data.columns]
+                
+                if len(available_features) > 2:
+                    corr_matrix = self.processed_data[available_features].corr()
+                    
+                    im = axes[1, 1].imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+                    axes[1, 1].set_xticks(range(len(available_features)))
+                    axes[1, 1].set_yticks(range(len(available_features)))
+                    axes[1, 1].set_xticklabels([f[:8] for f in available_features], rotation=45)
+                    axes[1, 1].set_yticklabels([f[:8] for f in available_features])
+                    axes[1, 1].set_title('Corrélation Features Clés')
+                    
+                    # Ajouter les valeurs dans les cellules
+                    for i in range(len(available_features)):
+                        for j in range(len(available_features)):
+                            axes[1, 1].text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
+                                           ha='center', va='center', fontsize=8)
+                else:
+                    axes[1, 1].text(0.5, 0.5, 'Features insuffisantes\npour corrélation',
+                                   ha='center', va='center', transform=axes[1, 1].transAxes)
+            else:
+                axes[1, 1].text(0.5, 0.5, 'Données non chargées',
+                               ha='center', va='center', transform=axes[1, 1].transAxes)
+    
+        except Exception as e:
+            for ax in axes.flat:
+                ax.text(0.5, 0.5, f'Erreur:\n{str(e)[:50]}...',
+                       ha='center', va='center', transform=ax.transAxes)
+    
+        plt.tight_layout()
+    
+        canvas = FigureCanvasTkAgg(fig, self.analysis_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def get_unknown_values_report(self):
+        """Obtenir le rapport des valeurs inconnues du feature engineer"""
+        if hasattr(self.feature_engineer, 'get_unknown_values_report'):
+            return self.feature_engineer.get_unknown_values_report()
+        else:
+            return None
+    
+    # CORRECTION POUR LE PLACEMENT DES MÉTHODES
+    # S'assurer que show_galop_trot_comparison est bien dans la classe et correctement indentée
+    def show_galop_trot_comparison(self):
+        """Afficher la comparaison Galop vs Trot"""
+        if self.processed_data is None:
+            messagebox.showwarning("Attention", "Aucune donnée chargée")
+            return
+    
+        # Nettoyer le frame
+        for widget in self.analysis_frame.winfo_children():
+            widget.destroy()
+    
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Comparaison Galop vs Trot - Analyses Statistiques', fontsize=16, fontweight='bold')
+    
+        try:
+            # Séparer les données par type
+            galop_data = self.processed_data[self.processed_data['allure'] == 'GALOP']
+            trot_data = self.processed_data[self.processed_data['allure'] == 'TROT']
+    
+            # Graphique 1: Comparaison des taux de victoire
+            if not galop_data.empty and not trot_data.empty:
+                galop_winrate = galop_data['win_rate'].mean()
+                trot_winrate = trot_data['win_rate'].mean()
+                
+                types = ['GALOP', 'TROT']
+                winrates = [galop_winrate, trot_winrate]
+                colors = ['#e74c3c', '#3498db']
+                
+                bars = axes[0, 0].bar(types, winrates, color=colors, alpha=0.8)
+                axes[0, 0].set_ylabel('Taux de Victoire Moyen')
+                axes[0, 0].set_title('Comparaison Taux de Victoire')
+                axes[0, 0].grid(True, alpha=0.3)
+                
+                # Ajouter les valeurs sur les barres
+                for bar, rate in zip(bars, winrates):
+                    axes[0, 0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.001,
+                                   f'{rate:.3f}', ha='center', va='bottom', fontweight='bold')
+    
+            # Graphique 2: Distribution des cotes
+            if not galop_data.empty and not trot_data.empty:
+                axes[0, 1].hist(galop_data['direct_odds'], bins=20, alpha=0.7, label='GALOP', 
+                               color='#e74c3c', density=True)
+                axes[0, 1].hist(trot_data['direct_odds'], bins=20, alpha=0.7, label='TROT', 
+                               color='#3498db', density=True)
+                axes[0, 1].set_xlabel('Cotes Directes')
+                axes[0, 1].set_ylabel('Densité')
+                axes[0, 1].set_title('Distribution des Cotes')
+                axes[0, 1].legend()
+                axes[0, 1].grid(True, alpha=0.3)
+    
+            # Graphique 3: Expérience moyenne
+            if not galop_data.empty and not trot_data.empty:
+                galop_exp = galop_data['nombreCourses'].mean()
+                trot_exp = trot_data['nombreCourses'].mean()
+                
+                types = ['GALOP', 'TROT']
+                experiences = [galop_exp, trot_exp]
+                
+                bars = axes[1, 0].bar(types, experiences, color=colors, alpha=0.8)
+                axes[1, 0].set_ylabel('Nombre Moyen de Courses')
+                axes[1, 0].set_title('Expérience Moyenne')
+                axes[1, 0].grid(True, alpha=0.3)
+                
+                for bar, exp in zip(bars, experiences):
+                    axes[1, 0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                                   f'{exp:.1f}', ha='center', va='bottom', fontweight='bold')
+    
+            # Graphique 4: Gains moyens
+            if not galop_data.empty and not trot_data.empty:
+                galop_gains = galop_data['gains_carriere'].mean()
+                trot_gains = trot_data['gains_carriere'].mean()
+                
+                types = ['GALOP', 'TROT']
+                gains = [galop_gains, trot_gains]
+                
+                bars = axes[1, 1].bar(types, gains, color=colors, alpha=0.8)
+                axes[1, 1].set_ylabel('Gains Carrière Moyens (€)')
+                axes[1, 1].set_title('Comparaison Gains')
+                axes[1, 1].grid(True, alpha=0.3)
+                
+                for bar, gain in zip(bars, gains):
+                    axes[1, 1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + gain*0.01,
+                                   f'{gain:.0f}€', ha='center', va='bottom', fontweight='bold')
+    
+        except Exception as e:
+            for ax in axes.flat:
+                ax.text(0.5, 0.5, f'Erreur:\n{str(e)}',
+                       ha='center', va='center', transform=ax.transAxes)
+    
+        plt.tight_layout()
+    
+        canvas = FigureCanvasTkAgg(fig, self.analysis_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill='both', expand=True)        
 
     def _generate_comparative_backtest_report(self, results_by_type):
         """Générer un rapport comparatif de backtest"""
