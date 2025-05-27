@@ -389,7 +389,59 @@ class HorseRacingEnsemble:
             summary['total_models'] += len(models)
             
         return summary
-
+ 
+    def predict_ensemble(self, X, target_name):
+        """Méthode de compatibilité pour le backtesting"""
+        
+        # Détecter automatiquement le type de course
+        race_type = self._detect_race_type_from_features(X)
+        
+        # Si le type détecté n'est pas entraîné, essayer les autres
+        if not self.is_trained.get(race_type, False):
+            for available_type in ['GALOP', 'TROT', 'MIXED']:
+                if self.is_trained.get(available_type, False):
+                    race_type = available_type
+                    break
+        
+        if not self.is_trained.get(race_type, False):
+            raise ValueError(f"Aucun modèle entraîné disponible")
+        
+        return self.predict_specialized_ensemble(X, target_name, race_type)
+    
+    def _detect_race_type_from_features(self, X):
+        """Détecter le type de course basé sur les features"""
+        if hasattr(X, 'columns'):
+            feature_cols = set(X.columns)
+            
+            # Compter les features spécifiques
+            galop_indicators = sum(1 for f in feature_cols if any(keyword in f.lower() 
+                                  for keyword in ['oeilleres', 'handicappoids', 'jument_pleine']))
+            
+            trot_indicators = sum(1 for f in feature_cols if any(keyword in f.lower() 
+                                 for keyword in ['deferre', 'tempsob', 'handicapdist', 'avisentra']))
+            
+            if galop_indicators > trot_indicators:
+                return 'GALOP'
+            elif trot_indicators > galop_indicators:
+                return 'TROT'
+        
+        return 'MIXED'
+    
+    def calculate_prediction_confidence(self, X, target_name):
+        """Méthode de compatibilité pour le calcul de confiance"""
+        race_type = self._detect_race_type_from_features(X)
+        
+        if not self.is_trained.get(race_type, False):
+            for available_type in ['GALOP', 'TROT', 'MIXED']:
+                if self.is_trained.get(available_type, False):
+                    race_type = available_type
+                    break
+        
+        if not self.is_trained.get(race_type, False):
+            return np.ones(len(X)) * 0.5
+        
+        return self.calculate_specialized_confidence(X, target_name, race_type)
+    
     def validate_features(self, X):
         """Valider que les features correspondent à celles d'entraînement"""
         if not self.feature_names:
