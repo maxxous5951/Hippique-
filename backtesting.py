@@ -115,47 +115,78 @@ class BacktestingEngine:
         
         return results
     
-    def _process_single_race(self, test_data: pd.DataFrame, race_file: str, 
-                           strategy: str, feature_names: List[str]) -> Dict[str, Any]:
-        """Traiter une course individuelle"""
+    def _process_single_race(self, test_data, race_file, strategy, feature_names):
+        """Version avec debug pour identifier le problème"""
         
         race_data = test_data[test_data['race_file'] == race_file].copy()
         
-        if len(race_data) < 3:  # Ignorer les courses avec trop peu de chevaux
+        if len(race_data) < 3:
             return None
         
-        # Vérifier les features
+        print(f"\n🔍 DEBUG - Course: {race_file}")
+        print(f"   Chevaux: {len(race_data)}")
+        
+        # DIAGNOSTIC 1: Vérifier les variables cibles
+        if 'final_position' in race_data.columns:
+            positions = race_data['final_position'].value_counts().sort_index()
+            print(f"   Positions: {dict(positions)}")
+            
+            winners = race_data[race_data['final_position'] == 1]
+            print(f"   Gagnants trouvés: {len(winners)}")
+            
+            if len(winners) == 0:
+                print("   ❌ PROBLÈME: Aucun gagnant trouvé!")
+                return None
+        else:
+            print("   ❌ PROBLÈME: Colonne 'final_position' manquante!")
+            return None
+        
+        # DIAGNOSTIC 2: Vérifier les features
         if feature_names:
             missing_features = [f for f in feature_names if f not in race_data.columns]
             if missing_features:
-                self.error_handler.log_warning(f"Features manquantes pour {race_file}: {len(missing_features)}", "backtesting")
+                print(f"   ❌ Features manquantes: {len(missing_features)}/{len(feature_names)}")
                 return None
+            else:
+                print(f"   ✅ Features OK: {len(feature_names)}")
         
-        # Prédictions
+        # DIAGNOSTIC 3: Tester les prédictions
         try:
             X_race = race_data[feature_names].fillna(0) if feature_names else race_data.fillna(0)
             
-            # Prédictions de l'ensemble
-            win_probs = self.ensemble_model.predict_ensemble(X_race, 'win')
-            place_probs = self.ensemble_model.predict_ensemble(X_race, 'place')
+            # Détecter le type de course
+            race_type = self.ensemble_model.get_best_race_type_for_prediction(race_data)
+            print(f"   Type détecté: {race_type}")
+            
+            # Test prédiction
+            win_probs = self.ensemble_model.predict_specialized_ensemble(X_race, 'win', race_type)
+            place_probs = self.ensemble_model.predict_specialized_ensemble(X_race, 'place', race_type)
+            
+            print(f"   Prédictions win: min={win_probs.min():.3f}, max={win_probs.max():.3f}")
+            print(f"   Prédictions place: min={place_probs.min():.3f}, max={place_probs.max():.3f}")
             
             race_data['pred_win_prob'] = win_probs
             race_data['pred_place_prob'] = place_probs
             
-            # Appliquer la stratégie
+            # Test de la stratégie
             if strategy == 'place_strategy':
-                # Trier par probabilité de place
                 race_data_sorted = race_data.sort_values('pred_place_prob', ascending=False)
-                return self._apply_place_betting_strategy(race_data_sorted)
+                result = self._apply_place_betting_strategy(race_data_sorted)
             else:
-                # Trier par probabilité de victoire
                 race_data_sorted = race_data.sort_values('pred_win_prob', ascending=False)
-                return self._apply_betting_strategy(race_data_sorted, strategy)
+                result = self._apply_betting_strategy(race_data_sorted, strategy)
+            
+            if result:
+                print(f"   Résultat: {result}")
+            else:
+                print("   ❌ Aucun résultat de stratégie")
+                
+            return result
                 
         except Exception as e:
-            self.error_handler.log_warning(f"Erreur prédiction {race_file}: {str(e)}", "backtesting")
+            print(f"   ❌ Erreur prédiction: {str(e)}")
             return None
-    
+        
     def _apply_place_betting_strategy(self, race_data: pd.DataFrame) -> Dict[str, Any]:
         """Stratégie basée sur les probabilités de place"""
         results = {
