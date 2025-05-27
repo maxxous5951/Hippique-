@@ -65,34 +65,38 @@ class EnhancedHorseRacingGUI:
         self.root = root
         self.root.title("🏇 Prédicteur Hippique PRO - IA Spécialisée Galop/Trot")
         self.root.geometry("1400x900")
-
+        
+        # CORRECTION: Initialiser status_var dès le début
+        self.status_var = tk.StringVar()
+        self.status_var.set("🚀 Initialisation de l'IA Spécialisée Galop/Trot...")
+        
         # Initialisation des composants AMÉLIORÉS
         self.cache = IntelligentCache()
         self.error_handler = RobustErrorHandler()
         self.feature_engineer = EnhancedFeatureEngineer()  # Version améliorée
         self.ensemble = SpecializedHorseRacingEnsemble()   # Version spécialisée
         self.backtesting_engine = BacktestingEngine()
-
+        
         # Données
         self.raw_data = None
         self.processed_data = None
         self.training_results = {'GALOP': {}, 'TROT': {}, 'MIXED': {}}
         self.json_files = []
         self.new_race_data = None
-
+        
         # Statistiques par type de course
         self.race_type_stats = {'GALOP': {}, 'TROT': {}, 'MIXED': {}}
-
+        
         # Queue pour les mises à jour thread-safe
         self.queue = queue.Queue()
-
+        
         # Configuration du style
         self._setup_style()
         
         # Configuration de l'interface
         self.setup_ui()
         self.check_queue()
-
+        
         # Message de bienvenue différé
         self.root.after(1500, self.show_welcome_message)
 
@@ -111,25 +115,25 @@ class EnhancedHorseRacingGUI:
         style.configure('Error.TLabel', foreground='#e74c3c')
 
     def setup_ui(self):
-        """Configuration complète de l'interface utilisateur améliorée"""
-
+        """Configuration complète de l'interface utilisateur améliorée - ORDRE CORRIGÉ"""
+        
         # Header principal avec info spécialisation
         self._create_enhanced_header()
-
+        
+        # CORRECTION: Créer la barre de statut EN PREMIER pour initialiser status_var
+        self._create_enhanced_status_bar()
+        
         # Notebook pour les onglets
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
-
+        
         # Création des onglets améliorés
         self._create_enhanced_loading_tab()
         self._create_enhanced_training_tab()
         self._create_enhanced_prediction_tab()
         self._create_enhanced_analytics_tab()
         self._create_enhanced_backtesting_tab()
-
-        # Barre de statut améliorée
-        self._create_enhanced_status_bar()
-
+        
         # Démarrage des métriques de performance
         self.update_performance_metrics()
 
